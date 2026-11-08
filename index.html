@@ -107,6 +107,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Micr
 .cicon img{display:block;width:100%;height:100%;object-fit:contain;background:#fff;border-radius:11px;}
 .ctitle{font-size:15px;font-weight:700;letter-spacing:-.1px;line-height:1.35;flex:1;}
 .badge{font-size:11.5px;font-weight:700;padding:4px 10px;border-radius:999px;white-space:nowrap;}
+/* 卡片右上角的小圆按钮：更新凭证 */
+.cu{flex:0 0 auto;width:26px;height:26px;padding:0;border-radius:50%;border:1px solid rgba(100,116,139,.25);
+background:rgba(100,116,139,.08);color:inherit;font-size:13px;line-height:1;cursor:pointer;
+display:flex;align-items:center;justify-content:center;transition:.18s;}
+.cu:hover{background:rgba(0,194,154,.14);border-color:rgba(0,194,154,.45);transform:rotate(35deg);}
+.cu:active{transform:rotate(180deg) scale(.94);}
 .badge.done{color:#00614D;background:rgba(0,194,154,.13);}
 .badge.todo{color:#b54708;background:rgba(247,144,9,.13);}
 .metric{margin:11px 0 2px;}
@@ -453,6 +459,78 @@ function msubHTML(it){
   if(isNaN(n)) return '';
   return '<div class="msub">昨日用量 <b>'+esc(n.toFixed(2))+'</b> 分</div>';
 }
+// ===== 更新凭证（每张卡右上角 🔄）=====
+// 原理：云函数打不开浏览器，所以真正的抓取在**你电脑上**跑：
+//   wb-cloud/updater.py 起一个 127.0.0.1:8899 的小服务，点按钮时
+//   ① 用 JSOP 探活（<script> 不受跨域限制，https 页面也能探 http://127.0.0.1）
+//   ② 打开 /grab?p=平台 → 自动开一个标签页到该平台登录页
+//   ③ 你在里面登录（已登录就跳过）→ 它读 Cookie → 推到云端 + 重新打包部署
+var UPDATER_BASE = "http://127.0.0.1:8899";
+var CRED_META = {
+  workbuddy:{auto:true,  hint:"从本机 WorkBuddy 客户端同步 accessToken"},
+  jimeng:   {auto:true,  hint:"打开即梦，确认已登录后自动抓 Cookie"},
+  coze:     {auto:true,  hint:"打开扣子，确认已登录后自动抓 Cookie"},
+  lingxi:   {auto:true,  hint:"打开 WPS 灵犀，确认已登录后自动抓 Cookie"},
+  trae:     {auto:true,  hint:"打开 Trae，确认已登录后自动抓 Cookie"},
+  huawei:   {auto:true,  hint:"打开华为云码道，确认已登录后自动抓 Cookie"},
+  qoder:    {auto:true,  hint:"打开 Qoder，确认已登录后自动抓 Cookie"},
+  minimax:  {auto:true,  hint:"打开 MiniMax，确认已登录后自动抓 token"},
+  linkai:   {auto:true,  hint:"打开 Link AI 控制台，确认已登录后自动抓 token"},
+  qianfan:  {auto:false, hint:"千帆用的是你自建服务的 token，没有网页登录态，请直接改 qf_token.txt"},
+};
+function credBtnHTML(it){
+  var n = it && it.name;
+  if(!n || n === 'travel') return '';
+  var meta = CRED_META[n];
+  var tip = meta ? (meta.hint || '更新凭证') : '更新凭证';
+  if(meta && meta.auto === false) tip = tip;
+  return '<button class="cu" type="button" data-cred="'+esc(n)+'" title="更新凭证 · '+esc(tip)+'" aria-label="更新凭证">🔄</button>';
+}
+function updaterPing(cb){
+  var s = document.createElement('script');
+  var done = false;
+  var fin = function(ok){ if(done) return; done = true; try{ s.remove(); }catch(e){} cb(ok); };
+  s.src = UPDATER_BASE + '/ping.js?t=' + Date.now();
+  s.onload = function(){ fin(true); };
+  s.onerror = function(){ fin(false); };
+  document.head.appendChild(s);
+  setTimeout(function(){ fin(false); }, 2500);
+}
+function updateCred(name, btn){
+  var meta = CRED_META[name];
+  if(!meta){
+    showMsg("「"+name+"」暂不支持一键更新凭据，请按卡片里的「前往登录」手动处理","err");
+    return;
+  }
+  if(meta.auto === false){
+    showMsg(meta.hint || "该平台不支持一键更新","err");
+    return;
+  }
+  if(btn){ btn.disabled = true; btn.style.opacity = .45; }
+  var restore = function(){ if(btn){ btn.disabled = false; btn.style.opacity = 1; } };
+  var open = function(){
+    var u = UPDATER_BASE + '/grab?p=' + encodeURIComponent(name)
+          + '&k=' + encodeURIComponent(getKey() || '');
+    var w = window.open(u, '_blank');
+    if(!w) showMsg("浏览器拦了新窗口，请允许弹窗后再点一次","err");
+  };
+  updaterPing(function(ok){
+    restore();
+    // 探活失败也照样打开：有些浏览器策略会挡住 https→127.0.0.1 的探测，
+    // 但「新标签页跳转」本身永远是放行的，不能因为探测失败就不让用户试。
+    open();
+    if(!ok){
+      showMsg("如果新窗口打不开（提示无法访问），说明本机更新服务没启动：在你的电脑上双击 wb-cloud/start-updater.bat（或运行 python wb-cloud/updater.py）","err");
+    }
+  });
+}
+document.addEventListener('click', function(e){
+  var b = e.target && e.target.closest ? e.target.closest('button.cu') : null;
+  if(!b) return;
+  e.preventDefault(); e.stopPropagation();
+  updateCred(b.getAttribute('data-cred'), b);
+});
+
 function cardHTML(it){
   var manualTag = it.group==='manual' ? '<span class="badge manual">✋ 手动</span>' : '';
   if(it.disabled){
@@ -461,7 +539,7 @@ function cardHTML(it){
     return ''+
       '<div class="card disabled" data-name="'+esc(it.name)+'" style="--c:'+it.brand+';--c2:'+it.brand2+'">'+
         '<div class="card-main">'+
-          '<div class="card-top"><div class="cicon">'+iconFor(it)+'</div><div class="ctitle">'+esc(it.title)+'</div>'+manualTag+'<span class="badge todo">已停用</span></div>'+
+          '<div class="card-top"><div class="cicon">'+iconFor(it)+'</div><div class="ctitle">'+esc(it.title)+'</div>'+manualTag+'<span class="badge todo">已停用</span>'+credBtnHTML(it)+'</div>'+
           '<div class="rows">'+drows+'</div>'+
           '<div class="card-acts"><button class="cta ghost recheck" data-name="'+esc(it.name)+'">重新检查</button>'+dentries+'</div>'+
         '</div>'+
@@ -511,7 +589,7 @@ function cardHTML(it){
       '<div class="card-main">'+
         '<div class="card-top">'+
           '<div class="cicon">'+iconFor(it)+'</div>'+
-          '<div class="ctitle">'+esc(it.title)+'</div>'+ manualTag + badge +
+          '<div class="ctitle">'+esc(it.title)+'</div>'+ manualTag + badge + credBtnHTML(it) +
         '</div>'+
         '<div class="metric"><span class="mlabel">'+esc(it.metric_label)+'</span><br><span class="mval">'+esc(it.metric_value)+'</span></div>'+
         msubHTML(it) +
@@ -1218,7 +1296,7 @@ function showMain(){
   var el=$('focus'); if(el){ el.style.display='none'; el.innerHTML=''; }
   load();
 }
-var PLATFORMS = {workbuddy:"WorkBuddy",qianfan:"百度千帆",minimax:"MiniMax Code",qoder:"Qoder",linkai:"Link AI",lingxi:"WPS 灵犀",trae:"Trae Work",huawei:"华为码道",coze:"Coze 扣子",doubao:"豆包",jimeng:"即梦 AI",};
+var PLATFORMS = {workbuddy:"WorkBuddy",qianfan:"百度千帆",minimax:"MiniMax Code",qoder:"Qoder",linkai:"Link AI",lingxi:"WPS 灵犀",trae:"Trae Work",huawei:"华为码道",coze:"Coze 扣子",jimeng:"即梦 AI",};
 function focusSettings(){
   var el=$('focus');
   el.innerHTML='<a class="back" id="backBtn">‹ 返回签到中心</a><div id="fbody" class="settings"></div>';
@@ -1242,10 +1320,17 @@ function renderSettings(){
       +'</select></label>'
       +'<p class="ftip">到点后自动跑全部已启用平台。开启随机浮动后，每天在基准时间后的区间内随机抽一个时刻（当天抽签结果落盘，重启不重抽），避免每天同一秒发起签到。</p>'
       +'</div>'
-      +'<div class="fgroup"><h4>🔑 中心访问口令</h4>'
-      +'<label class="fld"><span>当前状态</span><span class="fval">'+(s.key_set?'页面已单独设置':'沿用服务器环境变量')+'</span></label>'
-      +'<label class="fld col"><span>新口令（留空=不变）</span><input type="password" id="newKey" placeholder="输入新口令"></label>'
-      +'<p class="ftip">修改后立即生效；保存后本机需用新口令访问。</p>'
+      +'<div class="fgroup"><h4>🔑 中心访问口令（进网站的密码）</h4>'
+      +'<label class="fld"><span>当前状态</span><span class="fval">'+(s.key_set?'✅ 已设置，打开面板要先输口令':'⚠️ 未设置：谁拿到链接都能看数据、改设置')+'</span></label>'
+      +'<label class="fld col"><span>新口令</span><input type="password" id="newKey" placeholder="设一个只有你知道的口令，例如 520666"></label>'
+      +'<div style="display:flex;gap:8px;margin:8px 0 2px;flex-wrap:wrap">'
+      +'<button class="btn-mini" id="setKey" type="button">设置 / 修改口令</button>'
+      +'<button class="btn-mini" id="clearKey" type="button">清除口令</button>'
+      +'<button class="btn-mini" id="forgetKey" type="button">只清除本机记住的口令</button></div>'
+      +'<p class="ftip">这是<b>打开这个网页时要输的密码</b>，和各平台账号无关。设好之后：<br>'
+      +'· 别人拿到链接打开 → 必须先输口令；<br>'
+      +'· <b>你自己的浏览器不会再问</b>（已经记住在本机了），所以「设了但打开没要密码」是正常的；想亲眼验证，点「只清除本机记住的口令」刷新一下就会重新要口令。<br>'
+      +'· 云端函数是冷启动重建的，口令万一丢了，你这台记住口令的浏览器下次打开会自动把它补回去。</p>'
       +'</div>'
       +'<div class="fgroup"><h4>🎚 平台开关</h4>'+ph+'</div>'
       +'<div class="fgroup"><h4>🔔 完成通知</h4>'
@@ -1259,6 +1344,35 @@ function renderSettings(){
     $('fbody').innerHTML=html;
     $('saveSettings').addEventListener('click', function(){ saveSettings(false); });
     $('testWebhook').addEventListener('click', testWebhook);
+    // 口令单独提交：只发 access_key，后端会保留其它设置（不会被默认值冲掉）
+    function saveKey(v){
+      api("api/settings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({access_key:v})}).then(function(r){
+        if(!r.ok){ showMsg("保存口令失败："+(r.error||"未知错误"),"err"); return; }
+        try{
+          if(v) localStorage.setItem(KEY_STORE, v); else localStorage.removeItem(KEY_STORE);
+        }catch(e){}
+        $('newKey').value='';
+        showMsg(v?("口令已设置 ✅ 下次打开要输 "+v):"口令已清除（面板恢复公开）","ok");
+        setTimeout(hideMsg,2200);
+      }).catch(function(e){ showMsg("保存口令失败："+(e&&e.message),"err"); });
+    }
+    $('setKey').addEventListener('click', function(){
+      var v=($('newKey').value||'').trim();
+      if(!v){ showMsg("请先输入新口令","err"); return; }
+      saveKey(v);
+    });
+    $('clearKey').addEventListener('click', function(){
+      if(confirm("清除后任何人拿到链接都能打开面板并改设置，继续？")) saveKey("");
+    });
+    // 只清本机 localStorage：云端口令不动，用来验证「别人打开是不是真要口令」
+    $('forgetKey').addEventListener('click', function(){
+      try{ localStorage.removeItem(KEY_STORE); }catch(e){}
+      showMsg("已忘掉本机记住的口令，正在刷新…","ok");
+      setTimeout(function(){ location.reload(); }, 600);
+    });
+    $('newKey').addEventListener('keydown', function(e){
+      if(e.key==='Enter'){ e.preventDefault(); $('setKey').click(); }
+    });
     // 自动保存：改动任意开关/时间/口令即写盘，不用再点「保存设置」
     // 用属性赋值（而非 addEventListener）保证重复渲染不会叠加监听。
     var saveTimer=null;
@@ -1333,7 +1447,7 @@ function manualCardHTML(it){
   return ''
     + '<div class="card manual-card" data-name="'+esc(it.name)+'" style="--c:'+it.brand+';--c2:'+it.brand2+'">'
     +   '<div class="card-main">'
-    +     '<div class="card-top"><div class="cicon">'+iconFor(it)+'</div><div class="ctitle">'+esc(it.title)+'</div>'+badge+'</div>'
+    +     '<div class="card-top"><div class="cicon">'+iconFor(it)+'</div><div class="ctitle">'+esc(it.title)+'</div>'+badge+credBtnHTML(it)+'</div>'
     +     guide
     +     '<div class="rows">'+rows+'</div>'
     +     '<div class="card-acts">'+retry + browserLink + offLink+'</div>'
@@ -1476,7 +1590,7 @@ function renderCenter(d){
     c.addEventListener('click', function(e){
       var name = c.getAttribute('data-name');
       if(!name) return;
-      if(e.target.closest('button.cta') || e.target.closest('.cta-link') || e.target.closest('.entry')) return;
+      if(e.target.closest('button.cta') || e.target.closest('button.cu') || e.target.closest('.cta-link') || e.target.closest('.entry')) return;
       openDetail(name);
     });
   });
@@ -1823,7 +1937,23 @@ $("keyEye").addEventListener("click", function(){
     if(e.key === 'Escape' && m.classList.contains('show')) closeModal();
   });
 })();
-if(VIEW==="growth" || VIEW==="daily" || VIEW==="settings"){ showFocus(VIEW); } else { load(); }
+// 冷启动自愈：云函数是新实例时 settings.json 是空白的，口令会「消失」（表现为谁都能打开）。
+// 这台浏览器记着口令，就悄悄把它补回云端，不用用户再进设置设一遍。
+function bootHeal(){
+  var k = getKey();
+  if(!k) return Promise.resolve();
+  return fetch("api/settings").then(function(r){ return r.json(); }).then(function(s){
+    if(s && s.ok && s.key_set === false){
+      return fetch("api/settings",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({access_key:k})}).then(function(r){ return r.json(); }).then(function(x){
+          if(x && x.ok){ try{ console.log("[key] 已把本机口令补回云端"); }catch(e){} }
+        });
+    }
+  }).catch(function(){});
+}
+bootHeal().then(function(){
+  if(VIEW==="growth" || VIEW==="daily" || VIEW==="settings"){ showFocus(VIEW); } else { load(); }
+});
 </script>
 </body>
 </html>
