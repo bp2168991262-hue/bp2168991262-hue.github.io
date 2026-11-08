@@ -3,6 +3,7 @@
 <head>
 <base href="https://wb-checkin-dcxtdomuwf.cn-hangzhou.fcapp.run/">
 <meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex, nofollow">
 <!-- 页面托管在 GitHub Pages，接口在阿里云函数计算（默认域名强制下载，不能直接开页面） -->
 
 <meta charset="utf-8">
@@ -421,6 +422,7 @@ function iconFor(it){
   if(it.icon==="growth") return ICON_GROWTH;
   if(it.icon==="daily") return ICON_DAILY;
   if(it.icon==="travel") return '<div style="font-size:20px">🧳</div>';
+  if(it.icon==="jimeng") return '<div style="font-size:20px">🎬</div>';
   return '<div style="font-size:20px">🪙</div>';
 }
 function fmtLast(lr){
@@ -1216,7 +1218,7 @@ function showMain(){
   var el=$('focus'); if(el){ el.style.display='none'; el.innerHTML=''; }
   load();
 }
-var PLATFORMS = {workbuddy:"WorkBuddy",qianfan:"百度千帆",minimax:"MiniMax Code",qoder:"Qoder",linkai:"Link AI",lingxi:"WPS 灵犀",trae:"Trae Work",huawei:"华为码道",coze:"Coze 扣子",doubao:"豆包",};
+var PLATFORMS = {workbuddy:"WorkBuddy",qianfan:"百度千帆",minimax:"MiniMax Code",qoder:"Qoder",linkai:"Link AI",lingxi:"WPS 灵犀",trae:"Trae Work",huawei:"华为码道",coze:"Coze 扣子",doubao:"豆包",jimeng:"即梦 AI",};
 function focusSettings(){
   var el=$('focus');
   el.innerHTML='<a class="back" id="backBtn">‹ 返回签到中心</a><div id="fbody" class="settings"></div>';
@@ -1253,13 +1255,21 @@ function renderSettings(){
       +'<button class="btn-mini" id="testWebhook" type="button">测试推送</button>'
       +'<p class="ftip">支持「推送到个人微信」的地址：<br>· PushPlus：<code>https://www.pushplus.plus/send/你的token</code><br>· Server酱：<code>https://sctapi.ftqq.com/你的SendKey.send</code><br>· 企业微信群机器人：<code>https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx</code><br>当前状态：<b>'+(s.has_webhook?'已配置 ✅（出于安全不显示明文）':'未配置')+'</b>。测试时填入地址点「测试推送」即可，保存后同样不显示明文。</p>'
       +'</div>'
-      +'<div style="text-align:center;padding:6px 0 18px"><button class="cta" id="saveSettings" type="button">💾 保存设置</button></div>';
+      +'<div style="text-align:center;padding:6px 0 18px"><button class="cta" id="saveSettings" type="button">💾 立即保存</button><div class="ftip" style="margin-top:8px">改动会自动保存，无需手动点按钮</div></div>';
     $('fbody').innerHTML=html;
-    $('saveSettings').addEventListener('click', saveSettings);
+    $('saveSettings').addEventListener('click', function(){ saveSettings(false); });
     $('testWebhook').addEventListener('click', testWebhook);
+    // 自动保存：改动任意开关/时间/口令即写盘，不用再点「保存设置」
+    // 用属性赋值（而非 addEventListener）保证重复渲染不会叠加监听。
+    var saveTimer=null;
+    $('fbody').onchange = function(){ clearTimeout(saveTimer); saveTimer=setTimeout(function(){ saveSettings(true); }, 250); };
+    $('fbody').oninput = function(ev){
+      var t=ev.target||{};
+      if(t.type==='time'){ clearTimeout(saveTimer); saveTimer=setTimeout(function(){ saveSettings(true); }, 400); }
+    };
   }).catch(function(e){ showMsg("读取设置失败："+(e&&e.message),"err"); });
 }
-function saveSettings(){
+function saveSettings(silent){
   var plat={};
   Array.prototype.forEach.call(document.querySelectorAll('input[data-plat]'), function(c){ plat[c.getAttribute('data-plat')]=c.checked; });
   var body={
@@ -1278,7 +1288,8 @@ function saveSettings(){
     if(r.ok){
       var nk=($('newKey').value||'').trim();
       if(nk){ try{ localStorage.setItem(KEY_STORE, nk); }catch(e){} }
-      showMsg("设置已保存 ✅","ok");
+      showMsg(silent?"已自动保存 ✅":"设置已保存 ✅","ok");
+      if(silent) setTimeout(hideMsg, 1600);
     } else showMsg("保存失败："+(r.error||"未知错误"),"err");
   }).catch(function(e){ showMsg("保存失败："+(e&&e.message),"err"); });
 }
