@@ -1955,5 +1955,26 @@ bootHeal().then(function(){
   if(VIEW==="growth" || VIEW==="daily" || VIEW==="settings"){ showFocus(VIEW); } else { load(); }
 });
 </script>
+<script id="WB_LOGIN_ALL">
+/* 一次登录全部平台：入口指向 GitHub Pages 上的 /login.html（页面本身不在本机） */
+(function(){
+  function add(){
+    if(document.getElementById('wb-login-all')) return;
+    var a=document.createElement('a');
+    a.id='wb-login-all';
+    a.href='https://bp2168991262-hue.github.io/login.html';
+    a.target='_blank';
+    a.title='点开逐个登录 8 个平台（只需做一次）';
+    a.textContent='\u{1F680} \u4E00\u6B21\u767B\u5F55\u5168\u90E8\u5E73\u53F0';
+    a.style.cssText='position:fixed;right:16px;bottom:16px;z-index:99999;'+
+      'background:#00C29A;color:#04231c;font:700 13.5px/1 -apple-system,"Segoe UI",system-ui,sans-serif;'+
+      'padding:13px 18px;border-radius:999px;text-decoration:none;'+
+      'box-shadow:0 10px 26px rgba(0,0,0,.45);opacity:.97';
+    document.body.appendChild(a);
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',add);
+  else add();
+})();
+</script>
 </body>
 </html>
