@@ -520,7 +520,7 @@ function updateCred(name, btn){
     // 但「新标签页跳转」本身永远是放行的，不能因为探测失败就不让用户试。
     open();
     if(!ok){
-      showMsg("如果新窗口打不开（提示无法访问），说明本机更新服务没启动：在你的电脑上双击 wb-cloud/start-updater.bat（或运行 python wb-cloud/updater.py）","err");
+      showMsg("如果新窗口打不开（提示无法访问），说明本机更新服务没启动。它平时开机就自动在跑；真没起来的话，双击 wb-cloud 目录里的 updater-hidden.vbs 就能拉起（不会弹黑窗），或者重启电脑","err");
     }
   });
 }
